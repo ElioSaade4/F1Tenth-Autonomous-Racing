@@ -14,8 +14,7 @@ using namespace std::chrono_literals;
 class MinimalPublisher : public rclcpp::Node
 {
   public:
-    MinimalPublisher()
-    : Node("talker")
+    MinimalPublisher() : Node("talker")
     {
       publisher_ = this->create_publisher<ackermann_msgs::msg::AckermannDriveStamped>("drive", 10);
       
@@ -35,9 +34,10 @@ class MinimalPublisher : public rclcpp::Node
       drive_msg.drive.speed = this->get_parameter("v").as_double();
       drive_msg.drive.steering_angle = this->get_parameter("d").as_double();  
 
-      //RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", drive_msg.data.c_str());
+      RCLCPP_INFO(this->get_logger(), "Publishing talker");
       publisher_->publish(drive_msg);
     }
+
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Publisher<ackermann_msgs::msg::AckermannDriveStamped>::SharedPtr publisher_;
 };
