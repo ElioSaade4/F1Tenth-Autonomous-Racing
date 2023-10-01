@@ -5,13 +5,13 @@
 
 using std::placeholders::_1;
 
-class MinimalSubscriber : public rclcpp::Node
+class RelaySubscriber : public rclcpp::Node
 {
   public:
-    MinimalSubscriber() : Node("relay")
+    RelaySubscriber() : Node("relay")
     {
       subscription_ = this->create_subscription<ackermann_msgs::msg::AckermannDriveStamped>(
-      "drive", 10, std::bind(&MinimalSubscriber::topic_callback, this, _1));
+      "drive", 10, std::bind(&RelaySubscriber::topic_callback, this, _1));
 
       publisher_relay = this->create_publisher<ackermann_msgs::msg::AckermannDriveStamped>("drive_relay", 10);
     }
@@ -41,7 +41,7 @@ class MinimalSubscriber : public rclcpp::Node
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<MinimalSubscriber>());
+  rclcpp::spin(std::make_shared<RelaySubscriber>());
   rclcpp::shutdown();
   return 0;
 }

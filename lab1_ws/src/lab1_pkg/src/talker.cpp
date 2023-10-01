@@ -11,17 +11,17 @@ using namespace std::chrono_literals;
 /* This example creates a subclass of Node and uses std::bind() to register a
 * member function as a callback from the timer. */
 
-class MinimalPublisher : public rclcpp::Node
+class TalkerPublisher : public rclcpp::Node
 {
   public:
-    MinimalPublisher() : Node("talker")
+    TalkerPublisher() : Node("talker")
     {
       publisher_ = this->create_publisher<ackermann_msgs::msg::AckermannDriveStamped>("drive", 10);
       
       this->declare_parameter("v", rclcpp::PARAMETER_DOUBLE);
       this->declare_parameter("d", rclcpp::PARAMETER_DOUBLE);
        
-      timer_ = this->create_wall_timer(500ms, std::bind(&MinimalPublisher::timer_callback, this));
+      timer_ = this->create_wall_timer(0ms, std::bind(&TalkerPublisher::timer_callback, this));
     }
 
   private:
@@ -45,7 +45,7 @@ class MinimalPublisher : public rclcpp::Node
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<MinimalPublisher>());
+  rclcpp::spin(std::make_shared<TalkerPublisher>());
   rclcpp::shutdown();
   return 0;
 }
