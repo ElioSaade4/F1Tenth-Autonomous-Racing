@@ -6,7 +6,6 @@
 #include "rclcpp/rclcpp.hpp"
 #include "ackermann_msgs/msg/ackermann_drive_stamped.hpp"
 
-// to be able to use ms
 using namespace std::chrono_literals;
 
 /* This example creates a subclass of Node and uses std::bind() to register a
@@ -26,14 +25,9 @@ class TalkerPublisher : public rclcpp::Node
     }
 
   private:
-    // class attributes
-    rclcpp::Publisher<ackermann_msgs::msg::AckermannDriveStamped>::SharedPtr publisher_;
-    rclcpp::TimerBase::SharedPtr timer_;
-
     void timer_callback()
     {
       auto drive_msg = ackermann_msgs::msg::AckermannDriveStamped();
-
       drive_msg.header.stamp = this->now();
       drive_msg.header.frame_id = "drive_frame";
 
@@ -44,7 +38,8 @@ class TalkerPublisher : public rclcpp::Node
       publisher_->publish(drive_msg);
     }
 
-    
+    rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::Publisher<ackermann_msgs::msg::AckermannDriveStamped>::SharedPtr publisher_;
 };
 
 int main(int argc, char * argv[])
