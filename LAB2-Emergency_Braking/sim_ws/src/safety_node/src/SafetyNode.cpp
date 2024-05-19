@@ -144,7 +144,7 @@ class SafetyNode : public rclcpp::Node
 
                 pub_drive->publish( drive_msg );
             }
-
+            
         }
 
 
