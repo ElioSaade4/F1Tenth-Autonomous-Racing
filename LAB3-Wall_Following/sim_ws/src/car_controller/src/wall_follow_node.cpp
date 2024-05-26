@@ -11,21 +11,25 @@
 
 /*********************************************************************************************************************/
 
-#define         RANGES_SIZE         ( 1080 )            // Size of the ranges[] array
-#define         ANGLE_MIN           ( -2.35 )           // Laser scan minimum angle in radians
-#define         ANGLE_MAX           ( 2.35 )            // Laser scan maximum angle in radians
-#define         ANGLE_LEFT_1        ( 1.5708 )          // First laser scan angle in radians used to calculate distance from the left wall ( 90 degrees )
-#define         ANGLE_LEFT_2        ( 0.698132 )        // Second laser scan angle in radians used to calculate distance from the left wall ( 40 degrees )
-#define         DESIRED_DISTANCE    ( 0.8 )             // Desired distance to the wall
-#define         AC                  ( 0.25 )
+#define         RANGES_SIZE             ( 1080 )                            // Size of the ranges[] array
+#define         ANGLE_MIN               ( -2.35 )                           // Laser scan minimum angle in radians
+#define         ANGLE_MAX               ( 2.35 )                            // Laser scan maximum angle in radians
+#define         ANGLE_LEFT_1            ( 1.5708 )                          // First laser scan angle in radians used to calculate distance from the left wall ( 90 degrees )
+#define         ANGLE_LEFT_2            ( 0.698132 )                        // Second laser scan angle in radians used to calculate distance from the left wall ( 40 degrees )
+#define         THETA                   ( ANGLE_LEFT_1 - ANGLE_LEFT_2 )     // Angle difference of the laser scans sued to calculate distance from the left wall
+#define         DESIRED_DISTANCE        ( 0.8 )                             // Desired distance to the wall
+#define         AC                      ( 0.25 )
 
-#define         KP                  ( 25 )              // PID proportional gain
-#define         KI                  ( 0 )               // PID integral gain
-#define         KD                  ( 0.1 )             // PID derivative gain
+#define         KP                      ( 25 )                              // PID proportional gain
+#define         KI                      ( 0 )                               // PID integral gain
+#define         KD                      ( 0.1 )                             // PID derivative gain
 
-#define         MAX_NANOSEC         ( 10000000000 )
+#define         STEERING_ACTUATOR_MIN   ( -25 )                             // Minimum actuator steering angle (degrees) 
+#define         STEERING_ACTUATOR_MAX   ( 25 )                              // Maximum actuator steering angle (degrees)
 
-#define         QOS                 ( 10 )              // Quality of service for ROS nodes
+#define         MAX_NANOSEC             ( 10000000000 )                     // Max number of nanoseconds. Used for when the timer counter overflows
+
+#define         QOS                     ( 10 )                              // Quality of service for ROS nodes
 
 /*********************************************************************************************************************/
 
@@ -58,29 +62,19 @@ public:
         // Allocate space for all the vectors
         ranges.reserve( RANGES_SIZE );
 
-        /*
-        angles.reserve( RANGES_SIZE );
-
-        angles = makeAnglesVector( ANGLE_MIN, ANGLE_MAX, RANGES_SIZE );
-
-        for( int i = 0; i < RANGES_SIZE; i++ )
-        {
-            RCLCPP_INFO( this->get_logger(), "[ %i ]: %f", i, angles[ i ] );
-        }
-        */
     }
 
 private:
     
-    double prev_error;
-    double error;
-    double integral;
-    double derivative;
-    uint32_t prev_time;
-    uint32_t current_time;
-    uint32_t dt;
-    double steering_angle;
-    double velocity;
+    double prev_error;              // Error term of PID controller in the previous time step
+    double error;                   // Error term of PID controller in the current time step
+    double integral;                // Intergral term of PID controller in the current time step
+    double derivative;              // Derivative term of the PID controller in the current time step
+    uint32_t prev_time;             // Time stamp of the previous time step
+    uint32_t current_time;          // Time stamp of the current time step
+    uint32_t dt;                    // Time difference between previous and current time steps
+    double steering_angle;          // Value of steering angle command
+    double velocity;                // Value of velocity command
 
     // Topics
     std::string laserscan_topic = "/scan";
@@ -92,21 +86,20 @@ private:
 
     // Range vector
     std::vector<float> ranges;
-    //std::vector<float> angles;
 
 
     double getRange( std::vector<float>* range_data, double angle )
     {
         /*
-        Simple helper to return the corresponding range measurement at a given angle. Make sure you take care of NaNs and infs.
-
-        Args:
-            range_data: single range array from the LiDAR
-            angle: between angle_min and angle_max of the LiDAR
-
-        Returns:
-            range: range measurement in meters at the given angle
-        */
+         * Helper function to return the range measurement corresponding to a given angle. Make sure you take care of NaNs and infs.
+         * 
+         * Args:
+         *    range_data: single range array from the LiDAR
+         *    angle: between angle_min and angle_max of the LiDAR
+         * 
+         * Returns:
+         *    range: range measurement in meters at the given angle
+         */
         
         int index;
         float angle_step;
@@ -123,28 +116,25 @@ private:
     void getError( std::vector<float>* range_data, double desired_distance )
     {
         /*
-        Calculates the error to the wall. Follow the wall to the left (going counter clockwise in the Levine loop). You potentially will need to use get_range()
-
-        Args:
-            range_data: single range array from the LiDAR
-            desired_distance: desired distance to the wall
-
-        Returns:
-            error: calculated error
-        */
+         * Calculates the error to the wall. Follow the wall to the left (driving counter clockwise).
+         *
+         * Args:
+         *    range_data: single range array from the LiDAR
+         *    desired_distance: desired distance to the wall
+         *
+         * Returns:
+         *    error: calculated error
+         */
 
         double b;
         double a;
         double alpha;
-        double theta;
 
         b = getRange( range_data, ANGLE_LEFT_1 );
 
         a = getRange( range_data, ANGLE_LEFT_2 );
 
-        theta = ANGLE_LEFT_1 - ANGLE_LEFT_2;
-
-        alpha = atan( ( ( a * cos( theta ) ) - b ) / ( a * sin( theta ) ) ); 
+        alpha = atan( ( ( a * cos( THETA ) ) - b ) / ( a * sin( THETA ) ) ); 
 
         error = -( desired_distance - ( ( b * cos( alpha ) ) + ( AC * sin ( alpha ) ) ) );
     }
@@ -152,42 +142,47 @@ private:
     void pidControl()
     {
         /*
-        Based on the calculated error, publish vehicle control
-
-        Args:
-            error: calculated error
-            velocity: desired velocity
-
-        Returns:
-            None
-        */
+         * PID controller to publish vehicle controls based on the calculated error
+         */
 
         // Use kp, ki & kd to implement a PID controller
         if( dt > 0 )
         {
-            integral += ( error - prev_error ) * dt * ( 10 ^ ( -6 ) );
+            integral += ( error ) * dt * ( 10 ^ ( -6 ) );
             derivative =  ( error - prev_error ) / ( dt * ( 10 ^ ( -6 ) ) );
 
             steering_angle = ( KP * error ) + ( KI * integral ) + ( KD * derivative );
 
             RCLCPP_INFO( this->get_logger(), "Steering angle: %f", steering_angle );
 
-            steering_angle = steering_angle * 3.14159265359 / 180;
-
-            // TODO: add saturation for steering angle
-            
-            if( abs( steering_angle ) < 0.174533 )
+            // Steering angle actuator limits
+            if( steering_angle < STEERING_ACTUATOR_MIN )
             {
-                velocity = 1.5;
+                steering_angle = STEERING_ACTUATOR_MIN;
             }
-            else if( abs( steering_angle ) < 0.349066 )
+            else if( steering_angle > STEERING_ACTUATOR_MAX )
             {
-                velocity = 1;
+                steering_angle = STEERING_ACTUATOR_MAX;
+            }
+
+            //TODO: add antiwindup for integral term
+            
+            // Piecewsie linear function of velocity vs. steering angle to go faster in straights and slower when turning
+            if( abs( steering_angle ) < 3 )
+            {
+                velocity = ( - 0.667 * abs( steering_angle ) ) + 4.5;
+            }
+            else if( abs( steering_angle ) < 10 )
+            {
+                velocity = ( - 0.214 * abs( steering_angle ) ) + 3.142;
             }
             else
             {
-                velocity = 0.5;
+                velocity = 1;
             }
+
+            // Convert steering angle to radians for publishing
+            steering_angle = steering_angle * 3.14159265359 / 180;
 
             // Fill in drive message and publish
             auto drive_msg = ackermann_msgs::msg::AckermannDriveStamped();
@@ -203,14 +198,14 @@ private:
     void laserScanCallback( const sensor_msgs::msg::LaserScan::ConstSharedPtr scan_msg ) 
     {
         /*
-        Callback function for LaserScan messages. Calculate the error and publish the drive message in this function.
-
-        Args:
-            msg: Incoming LaserScan message
-
-        Returns:
-            None
-        */
+         * Callback function for LaserScan messages. Calculate the error and publish the drive message in this function.
+         * 
+         * Args:
+         *     msg: Incoming LaserScan message
+         *
+         * Returns:
+         *     None
+         */
         
         current_time = ( this->now() ).nanoseconds();
         dt = current_time - prev_time;
@@ -229,28 +224,10 @@ private:
         prev_time = current_time;
 
     }
-
-    /*
-    static std::vector<float> makeAnglesVector( double start_angle, double end_angle, double n_elements ) 
-    {
-
-        std::vector<float> angles_vector;
-        float step = ( end_angle - start_angle ) / ( n_elements - 1 );
-
-        // Reserve memory for the vector
-        angles_vector.reserve( n_elements );
-
-        // Populate the vector
-        for( int index = 0; index < n_elements; index++ )
-        {
-            angles_vector.push_back( start_angle + ( index * step ) );
-        }
-        
-        return angles_vector;
-    }
-    */
     
 };
+
+
 int main( int argc, char ** argv ) 
 {
     /* 
