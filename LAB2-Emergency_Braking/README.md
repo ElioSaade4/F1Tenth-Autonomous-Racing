@@ -14,6 +14,9 @@ To run this lab, perform the following steps:
 2. Open **Docker Desktop**
 
 3. Open a command prompt, and navigate to the cloned lab folder
+```
+cd C:\...\F1Tenth_Labs\LAB2-Emergency_Braking
+```
 
 4. Run the following command in the command prompt to build the needed docker images and start the container
 ```
@@ -22,7 +25,7 @@ docker-compose up --build
 
 5. After the container is up and running, open a new command prompt and open a bash session inside the container with this command:
 ```
-docker exec -it lab2-sim-1 /bin/bash
+docker exec -it lab2-emergency_braking-sim-1 /bin/bash
 ```
 
 7. In a web browser, open http://localhost:8080/vnc.html and click **Connect**
@@ -32,6 +35,7 @@ docker exec -it lab2-sim-1 /bin/bash
 cd .. 
 source opt/ros/iron/setup.bash
 cd sim_ws 
+colcon build
 source install/local_setup.bash
 ```
 
