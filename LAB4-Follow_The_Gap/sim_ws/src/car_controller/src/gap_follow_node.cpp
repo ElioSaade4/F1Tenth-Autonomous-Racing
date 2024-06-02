@@ -8,21 +8,20 @@
 
 /*********************************************************************************************************************/
 
-#define         RANGES_SIZE                 ( 1080 )                            // Size of the ranges[] array
-#define         RANGES_ANGLE_MIN            ( -2.35 )                           // Laser scan minimum angle in radians
-#define         RANGES_ANGLE_MAX            ( 2.35 )                            // Laser scan maximum angle in radians
-//#define         RANGES_ANGLE_STEP           ( ( RANGES_ANGLE_MAX - RANGES_ANGLE_MIN ) / ( RANGES_SIZE - 1 ) )
+#define         RANGES_SIZE                 ( 1080 )                                                            // Size of the laser scan array (ranges[])
+#define         RANGES_ANGLE_MIN            ( -2.35 )                                                           // Laser scan minimum angle in radians
+#define         RANGES_ANGLE_MAX            ( 2.35 )                                                            // Laser scan maximum angle in radians
+#define         RANGES_ANGLE_STEP           ( ( RANGES_ANGLE_MAX - RANGES_ANGLE_MIN ) / ( RANGES_SIZE - 1 ) )   // Angle difference between 2 consecutive laser scan measurements
 
-#define         STEERING_ACTUATOR_MIN       ( -0.436332 )                             // Minimum actuator steering angle (radians) 
-#define         STEERING_ACTUATOR_MAX       ( 0.436332 )                              // Maximum actuator steering angle (radians)
+#define         STEERING_ACTUATOR_MIN       ( -0.636332 )                                                       // Minimum actuator steering angle (radians) 
+#define         STEERING_ACTUATOR_MAX       ( 0.636332 )                                                        // Maximum actuator steering angle (radians)
 
-#define         MAX_NANOSEC                 ( 10000000000 )                     // Max number of nanoseconds. Used for when the timer counter overflows
+#define         MAX_NANOSEC                 ( 10000000000 )                                                     // Max number of nanoseconds. Used for when the timer counter overflows
+#define         QOS                         ( 10 )                                                              // Quality of service for ROS nodes
 
-#define         QOS                         ( 10 )                              // Quality of service for ROS nodes
+#define         CAR_WIDTH                   ( 0.25 )                                                             // Car width in meters
 
-#define         CAR_WIDTH                   ( 0.5 )                             // Car width in meters
-
-#define         RANGE_THRESHOLD             ( 2 )
+#define         RANGE_THRESHOLD             ( 1.5 )
 
 /*********************************************************************************************************************/
 
@@ -46,35 +45,37 @@ public:
         pub_drive = this->create_publisher<ackermann_msgs::msg::AckermannDriveStamped>( drive_topic, QOS ); 
 
         // Allocate space for all the vectors
-        ranges.reserve( RANGES_SIZE );                  
+        ranges.reserve( RANGES_SIZE ); 
+
+        // Set the start and end indices for a laser scan view of 180 degrees (-90 to +90) instead of 270 degrees to prevent the car
+        // from turning backwards in some edge cases
+        range_180_degrees[ 0 ] = 0; //ceil( ( -1.5708 - RANGES_ANGLE_MIN ) / RANGES_ANGLE_STEP );
+        range_180_degrees[ 1 ] = 1079; //ceil( ( 1.5708 - RANGES_ANGLE_MIN ) / RANGES_ANGLE_STEP );             
     }
 
 private:
 
     // Variables
-    uint16_t range_car_bubble[ 2 ];
-    uint16_t range_free_space[ 2 ];
-    float steering_angle;
-    float velocity = 2;
+    uint16_t range_180_degrees[ 2 ];        // vector containing the start and end indices of 180 degrees view in the ranges vector
+    uint16_t range_car_bubble[ 2 ];         // vector containing the start and end indices of the car bubble around the closest object in the ranges vector 
+    uint16_t range_free_space[ 2 ];         // vector containing the start and end indices of the biggest gap in the ranges vector
+    float steering_angle;                   // value of car steering wheel command in radians
+    float velocity;                         // value of car velocity in m/s
 
     // Topics
-    std::string laserscan_topic = "/scan";
-    std::string drive_topic = "/drive";
+    std::string laserscan_topic = "/scan";  // name of the topic where the LaserScan message is published
+    std::string drive_topic = "/drive";     // name of the topic where the AckermannDriveStamped message is published
     
     // ROS subscribers and publishers
-    rclcpp::Subscription<sensor_msgs::msg::LaserScan>::ConstSharedPtr sub_laser_scan;
-    rclcpp::Publisher<ackermann_msgs::msg::AckermannDriveStamped>::SharedPtr pub_drive;
+    rclcpp::Subscription<sensor_msgs::msg::LaserScan>::ConstSharedPtr sub_laser_scan;       // subscriber to the LaserScan message
+    rclcpp::Publisher<ackermann_msgs::msg::AckermannDriveStamped>::SharedPtr pub_drive;     // publisher to the AckermannDriveStamped message
 
     // Range vector
-    std::vector<float> ranges;
+    std::vector<float> ranges;              // vector of laser scan values starting from -2.35 radians (right side of the car) to +2.35 radians (left of the car)
     
     
     void laserScanPreprocess( void )
     {   
-        // Preprocess the LiDAR scan array. Expert implementation includes:
-        // 1.Setting each value to the mean over some window
-        // 2.Rejecting high values (eg. > 3m)
-
         uint16_t index_closest;
         float distance_closest;
         float distance_between_scans;
@@ -84,57 +85,28 @@ private:
         index_closest = 0;
         distance_closest = ranges[ index_closest ];
 
-        for( uint16_t iterator = 0; iterator < RANGES_SIZE; iterator++ )
+        for( uint16_t iterator = range_180_degrees[ 0 ]; iterator < range_180_degrees[ 1 ]; iterator++ )
         {
-            //RCLCPP_INFO( this->get_logger(), "Range[%u]: %f", iterator, ranges[ iterator ] );
-
             if( ranges[ iterator ] < ranges[ index_closest ] )
             {
                 index_closest = iterator;
             }
         }
 
-        //RCLCPP_INFO( this->get_logger(), "Index Closest: %u", index_closest );
-
         distance_closest = ranges[ index_closest ];
 
-        //RCLCPP_INFO( this->get_logger(), "Distance Closest: %f", distance_closest );
-
-        float angle_step = ( ( RANGES_ANGLE_MAX - RANGES_ANGLE_MIN ) / ( RANGES_SIZE - 1 ) );
         // Approximated separation between 2 adjacent laser scans based on the distance to the closest object
-        distance_between_scans = tan( angle_step ) * distance_closest;
-
-        //RCLCPP_INFO( this->get_logger(), "Distance between scans: %f", distance_between_scans );
+        distance_between_scans = tan( RANGES_ANGLE_STEP ) * distance_closest;
 
         // Number of scans that cover the car width bubble
         n_car_width = ceil( CAR_WIDTH / distance_between_scans );
-
-        //RCLCPP_INFO( this->get_logger(), "Car Width: %u", n_car_width );
-
         
-        // Indices of the bubble of the car
-        // for min index use floor to have extra element in case of odd index & max with  to stay in vector bounds
-        range_car_bubble[ 0 ] = std::max( ( uint16_t )( floor( index_closest - ( n_car_width / 2 ) ) ), ( uint16_t )0 );
-        //RCLCPP_INFO( this->get_logger(), "laserScanPreprocess(): Car min index %u", range_car_bubble[ 0 ] );
-
+        // Indices of the bubble of the car around the point with the closest distance
+        // for min index use 'floor' to have extra element in case of odd index & 'max' with to stay in the 180 degrees view bounds
+        range_car_bubble[ 0 ] = std::max( ( uint16_t )( floor( index_closest - ( n_car_width / 2 ) ) ), range_180_degrees[ 0 ] );
         
-        // for max index use ceil to have extra element in case of odd index & min with 1079 to stay in vector bounds
-        range_car_bubble[ 1 ] = std::min( ( uint16_t )( ceil( index_closest + ( n_car_width / 2 ) ) ), ( uint16_t ) ( RANGES_SIZE - 1 ) );
-        //RCLCPP_INFO( this->get_logger(), "laserScanPreprocess(): Car max index %u", range_car_bubble[ 1 ] );
-
-        /*
-        // Set the values in the bubble to 0
-        for( uint16_t i = min_index; i <= max_index; i++ )
-        {
-            ranges[ i ] = 0;
-        }
-
-        for(int i = 0; i < 1079; i++ ){
-            RCLCPP_INFO( this->get_logger(), "New Range[%u]: %f", i, ranges[ i ] );
-        }
-        
-        */
-        // TODO: Limit the laser scan to 180 degrees view so that the car doesn't go backwards
+        // for max index use ceil to have extra element in case of odd index & min with 1079 to stay in the 180 degrees view bounds
+        range_car_bubble[ 1 ] = std::min( ( uint16_t )( ceil( index_closest + ( n_car_width / 2 ) ) ), range_180_degrees[ 1 ] );
 
         return;
     }
@@ -142,8 +114,6 @@ private:
     
     void findMaxGap( void )
     {   
-        // Return the start index & end index of the max gap in free_space_ranges
-
         uint16_t range_max_gap[ 2 ];
         uint16_t gap_temp[ 2 ];
         bool b_gap_started;
@@ -156,7 +126,7 @@ private:
         gap_length = 0;
         b_gap_started = false;
 
-        for( uint16_t i = 0; i < RANGES_SIZE; i++ )
+        for( uint16_t i = range_180_degrees[ 0 ]; i < range_180_degrees[ 1 ]; i++ )
         {   
             if( i >= range_car_bubble[ 0 ] && i <= range_car_bubble[ 1 ] )    // point in the car bubble
             {
@@ -224,9 +194,6 @@ private:
         {
             RCLCPP_INFO( this->get_logger(), "findMaxGap(): No gap that satisfies the threshold was found" );
         }
-        
-        //RCLCPP_INFO( this->get_logger(), "findMaxGap(): gap start %u", range_free_space[ 0 ] );
-        //RCLCPP_INFO( this->get_logger(), "findMaxGap(): gap end %u", range_free_space[ 1 ] );
 
         return;
     }
@@ -234,33 +201,11 @@ private:
     
     void findBestPoint( void )
     {   
-        // Start_i & end_i are start and end indicies of max-gap range, respectively
-        // Return index of best point in ranges
-	    // Naive: Choose the furthest point within ranges and go there
+        uint16_t index_best_point;
 
-        uint16_t index_farthest;
-
-        /*
-        index_farthest = range_free_space[ 0 ];
-
-        for( uint16_t i = range_free_space[ 0 ]; i <= range_free_space[ 1 ]; i++ )
-        {
-            //RCLCPP_INFO( this->get_logger(), "Range[%u]: %f", iterator, ranges[ iterator ] );
-
-            if( ranges[ i ] > ranges[ index_farthest ] )
-            {
-                index_farthest = i;
-            }
-        }
-        */
-
-        index_farthest = ( uint16_t )( ( range_free_space[ 1 ] + range_free_space[ 0 ] ) / 2 );
-
-        RCLCPP_INFO( this->get_logger(), "findBestPoint(): Index farthest %u", index_farthest );
+        index_best_point = ( uint16_t )( ( range_free_space[ 1 ] + range_free_space[ 0 ] ) / 2 );
         
-        steering_angle = -2.35 + ( index_farthest * ( ( RANGES_ANGLE_MAX - RANGES_ANGLE_MIN ) / ( RANGES_SIZE - 1 ) ) );
-
-        RCLCPP_INFO( this->get_logger(), "findBestPoint(): Requested steering angle %f", steering_angle );
+        steering_angle = -2.35 + ( index_best_point * RANGES_ANGLE_STEP );
 
         return ;
     }
@@ -272,9 +217,7 @@ private:
         // Process each LiDAR scan as per the Follow Gap algorithm & publish an AckermannDriveStamped Message
 
         ranges = scan_msg->ranges;
-        //RCLCPP_INFO( this->get_logger(), "Range[0]: %f", ranges[ 0 ] );
 
-        /// TODO:
         // Find closest point to LiDAR
         // Eliminate all points inside 'bubble' (set them to zero) 
         laserScanPreprocess();
@@ -295,6 +238,23 @@ private:
             steering_angle = STEERING_ACTUATOR_MAX;
         }
 
+        // Piecewsie linear function of velocity vs. steering angle to go faster in straights and slower when turning
+        /*
+        if( abs( steering_angle ) < 0.0523599 )
+        {
+            velocity = ( - 0.667 * abs( steering_angle ) ) + 4.5;
+        }
+        else if( abs( steering_angle ) < 0.174533 )
+        {
+            velocity = ( - 0.214 * abs( steering_angle ) ) + 3.142;
+        }
+        else
+        {
+            velocity = 1;
+        }*/
+
+        velocity = 1;
+
         // Publish Drive message
         auto drive_msg = ackermann_msgs::msg::AckermannDriveStamped();
         drive_msg.header.stamp = this->now();
@@ -307,6 +267,7 @@ private:
 
 
 };
+
 int main( int argc, char ** argv ) {
 
     /* 
