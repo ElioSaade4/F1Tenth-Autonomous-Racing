@@ -1,0 +1,31 @@
+{
+  "configById": {
+    "Plot!1vlz539": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/scan.ranges[:]",
+          "enabled": true,
+          "color": "#4e98e2",
+          "showLine": false,
+          "label": "Distance (m)"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "index",
+      "sidebarDimension": 240,
+      "minXValue": 0
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": "Plot!1vlz539"
+}
