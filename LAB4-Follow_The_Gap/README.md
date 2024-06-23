@@ -1,7 +1,7 @@
-# F1Tenth Lab 3: Wall Following
+# F1Tenth Lab 4: Follow The Gap
 
 ## Outline
-In this lab, a wall following node is developed to run full autonomous laps around the Spielberg track by following the wall on one side of the car. (Assuming that the track has walls...)
+In this lab, a node is developed to drive autonomously based on Follow The Gap algorithm. The algorithm consists of processing the lidar measurements to find the biggest and farthest gap that the car can drive towards without colliding with obstacles.
 
 ## Requirements
 - Docker Desktop
@@ -15,7 +15,7 @@ To run this lab, perform the following steps:
 
 3. Open a command prompt, and navigate to the cloned lab folder
 ```
-cd C:\...\F1Tenth_Labs\LAB3-Wall_Following
+cd C:\...\F1Tenth_Labs\LAB4-Follow_The_Gap
 ```
 
 4. Run the following command in the command prompt to build the needed docker images and start the container
@@ -25,7 +25,7 @@ docker-compose up --build
 
 5. After the container is up and running, open a new command prompt and open a bash session inside the container with this command:
 ```
-docker exec -it lab3-wall_following-sim-1 /bin/bash
+docker exec -it lab4-follow_the_gap-sim-1 /bin/bash
 ```
 
 7. In a web browser, open http://localhost:8080/vnc.html and click **Connect**
@@ -55,7 +55,7 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard
 ```
 In the third bash session, run the wall following node that will start autonomous driving
 ```
-ros2 run car_controller wall_follow_node
+ros2 run car_controller gap_follow_node
 ```
 
 ## Further Development
