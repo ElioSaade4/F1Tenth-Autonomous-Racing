@@ -21,7 +21,7 @@
 
 #define         CAR_WIDTH                   ( 0.25 )                                                             // Car width in meters
 
-#define         RANGE_THRESHOLD             ( 1.5 )
+#define         RANGE_THRESHOLD             ( 2 )
 
 /*********************************************************************************************************************/
 
@@ -49,8 +49,8 @@ public:
 
         // Set the start and end indices for a laser scan view of 180 degrees (-90 to +90) instead of 270 degrees to prevent the car
         // from turning backwards in some edge cases
-        range_180_degrees[ 0 ] = 0; //ceil( ( -1.5708 - RANGES_ANGLE_MIN ) / RANGES_ANGLE_STEP );
-        range_180_degrees[ 1 ] = 1079; //ceil( ( 1.5708 - RANGES_ANGLE_MIN ) / RANGES_ANGLE_STEP );             
+        range_180_degrees[ 0 ] = ceil( ( -1.5708 - RANGES_ANGLE_MIN ) / RANGES_ANGLE_STEP );
+        range_180_degrees[ 1 ] = ceil( ( 1.5708 - RANGES_ANGLE_MIN ) / RANGES_ANGLE_STEP );             
     }
 
 private:
@@ -239,7 +239,6 @@ private:
         }
 
         // Piecewsie linear function of velocity vs. steering angle to go faster in straights and slower when turning
-        /*
         if( abs( steering_angle ) < 0.0523599 )
         {
             velocity = ( - 0.667 * abs( steering_angle ) ) + 4.5;
@@ -251,9 +250,7 @@ private:
         else
         {
             velocity = 1;
-        }*/
-
-        velocity = 1;
+        }
 
         // Publish Drive message
         auto drive_msg = ackermann_msgs::msg::AckermannDriveStamped();
